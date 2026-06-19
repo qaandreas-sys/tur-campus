@@ -29,8 +29,9 @@ AFRAME.registerComponent('face-camera', {
 // Bulina de navigare propriu-zisa.
 AFRAME.registerComponent('hotspot', {
   schema: {
-    to:    { type: 'string' },
-    label: { type: 'string', default: '' }
+    to:        { type: 'string' },
+    label:     { type: 'string', default: '' },
+    baseScale: { type: 'number', default: 1 }
   },
   init: function () {
     const el = this.el;
@@ -69,22 +70,37 @@ AFRAME.registerComponent('hotspot', {
     });
   },
 
-  // scalare lină (lerp) – garantat sa scrie object3D.scale in fiecare cadru
+  // scalare lină (lerp) – garantat sa scrie object3D.scale in fiecare cadru.
+  // baseScale ajustează mărimea aparentă la distanța de afișare.
   tick: function (t, dt) {
     const k = Math.min(1, (dt || 16) / 90);
     this.cur += (this.target - this.cur) * k;
     if (Math.abs(this.cur - this.target) < 0.001) this.cur = this.target;
-    this.el.object3D.scale.set(this.cur, this.cur, this.cur);
+    const s = this.cur * (this.data.baseScale || 1);
+    this.el.object3D.scale.set(s, s, s);
   }
 });
 
+// Distanța la care se afișează hotspot-urile (mai mare = mai „în spate", mai
+// confortabil în VR) și mărimea lor aparentă la acea distanță.
+window.HOTSPOT_DISPLAY_RADIUS = 12;
+window.HOTSPOT_SIZE = 1.55;
+
 // Helper global: construieste o bulina-hotspot ca entitate A-Frame.
 window.buildHotspot = function (link) {
+  const THREE = window.AFRAME.THREE;
+  // păstrăm DIRECȚIA în care a fost plasat hotspot-ul, dar îl împingem la o
+  // distanță fixă de afișare (editorul plasează la rază 6; aici normalizăm).
+  const p = (link.position || '0 -0.6 -5').split(/\s+/).map(Number);
+  const v = new THREE.Vector3(p[0], p[1], p[2]);
+  if (v.lengthSq() < 0.0001) v.set(0, -0.6, -5);
+  v.setLength(window.HOTSPOT_DISPLAY_RADIUS);
+
   // root billboard
   const root = document.createElement('a-entity');
-  root.setAttribute('position', link.position || '0 -0.6 -5');
+  root.setAttribute('position', v.x.toFixed(2) + ' ' + v.y.toFixed(2) + ' ' + v.z.toFixed(2));
   root.setAttribute('face-camera', '');
-  root.setAttribute('hotspot', `to: ${link.to}; label: ${link.label || ''}`);
+  root.setAttribute('hotspot', `to: ${link.to}; label: ${link.label || ''}; baseScale: ${window.HOTSPOT_SIZE}`);
 
   // disc translucid (zona de hover / click) — mai mic
   const fill = document.createElement('a-circle');

@@ -282,20 +282,7 @@
       <a-entity id="rig">
         <a-camera id="cam" fov="80" wasd-controls-enabled="false"
                   look-controls="reverseMouseDrag: false; touchEnabled: true; magicWindowTrackingEnabled: true">
-          <!-- cursor de PRIVIRE (VR / Apple Vision Pro): privești bulina ~1s
-               (sau pinch / trigger) și te teleportează. Reticulul se umple
-               vizual cât privești. -->
-          <a-entity id="reticle"
-                    cursor="fuse: true; fuseTimeout: 1100"
-                    raycaster="objects: .hotspot; far: 100"
-                    position="0 0 -1"
-                    visible="false"
-                    geometry="primitive: ring; radiusInner: 0.008; radiusOuter: 0.013; segmentsTheta: 32"
-                    material="color: #ffffff; shader: flat; opacity: 0.9"
-                    animation__fuse="property: scale; from: 0.4 0.4 0.4; to: 1.9 1.9 1.9; startEvents: fusing; dur: 1100; easing: easeInQuad"
-                    animation__leave="property: scale; to: 1 1 1; startEvents: mouseleave; dur: 150"
-                    animation__click="property: scale; from: 1.9 1.9 1.9; to: 1 1 1; startEvents: click; dur: 200">
-          </a-entity>
+          <!-- fără reticul în centru; selecția în VR se face cu mâna/controllerul -->
         </a-camera>
       </a-entity>
 
@@ -432,7 +419,6 @@
     const cam     = document.getElementById('cam');
     const scene   = document.getElementById('scene');
     const hsCont  = document.getElementById('hotspots');
-    const reticle = document.getElementById('reticle');
     const fade    = document.getElementById('fade');
 
     // construieste hotspot-urile pentru scena curenta
@@ -562,9 +548,34 @@
     scene.addEventListener('mousedown', ()=>{ if(rotating){ rotating=false;
       document.getElementById('btnRotate').style.color='var(--ink)'; }});
 
-    // reticulul de privire (fuse) e util doar in VR; pe desktop folosim mouse-ul
-    scene.addEventListener('enter-vr', ()=> reticle.setAttribute('visible', true));
-    scene.addEventListener('exit-vr',  ()=> reticle.setAttribute('visible', false));
+    // ===== selecție universală în VR (Quest trigger + Apple Vision Pro pinch) =====
+    // Folosim evenimentul WebXR „select": funcționează pentru orice tip de input
+    // (controller cu rază, mână cu pinch, sau gaze), adaptându-se fiecărei căști.
+    let xrBound = false;
+    scene.addEventListener('enter-vr', () => {
+      const session = scene.renderer && scene.renderer.xr && scene.renderer.xr.getSession();
+      if (session && !xrBound) {
+        xrBound = true;
+        session.addEventListener('select', onXRSelect);
+        session.addEventListener('end', () => { xrBound = false; });
+      }
+    });
+
+    function onXRSelect(ev){
+      try {
+        const frame = ev.frame, src = ev.inputSource;
+        if (!frame || !src || !src.targetRaySpace) return;
+        const refSpace = scene.renderer.xr.getReferenceSpace();
+        const pose = frame.getPose(src.targetRaySpace, refSpace);
+        if (!pose) return;
+        const m = new THREE.Matrix4().fromArray(pose.transform.matrix);
+        const origin = new THREE.Vector3().setFromMatrixPosition(m);
+        const dir = new THREE.Vector3(0, 0, -1)
+          .applyQuaternion(new THREE.Quaternion().setFromRotationMatrix(m)).normalize();
+        _ray.set(origin, dir);
+        navByRay();
+      } catch (e) {}
+    }
 
     // ================= MOD EDITARE SĂGEȚI =================
     const editBar    = document.getElementById('editBar');
@@ -625,6 +636,11 @@
       _ndc.x = ((clientX - r.left) / r.width) * 2 - 1;
       _ndc.y = -((clientY - r.top) / r.height) * 2 + 1;
       _ray.setFromCamera(_ndc, scene.camera);
+      navByRay();
+    }
+
+    // intersectează hotspot-urile cu raza _ray (deja setată) și navighează
+    function navByRay(){
       const meshes = [];
       Array.prototype.forEach.call(hsCont.querySelectorAll('[hotspot]'), el => {
         el.object3D.traverse(o => { if (o.isMesh) { o.userData._hsEl = el; meshes.push(o); } });
