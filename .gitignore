@@ -1,0 +1,6 @@
+# fișiere care nu trebuie urcate
+.claude/
+*.output
+
+# imaginile-sursă originale (cu spații în nume) — duplicate ale celor din images/
+0185_*.jpg

@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0b0f14" />
+  <title>Campus Educational — Tur Virtual 360°</title>
+
+  <!-- A-Frame: motor WebXR (VR / Apple Vision Pro / desktop / mobil) -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --bg-soft:#121821;
+      --ink:#eef3f8;
+      --muted:#9aa7b6;
+      --accent:#5ec8ff;
+      --accent-2:#7af0c8;
+      --card:#161d27;
+      --line:rgba(255,255,255,.08);
+      --shadow:0 18px 50px rgba(0,0,0,.45);
+      font-synthesis:none;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--ink);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      -webkit-font-smoothing:antialiased;
+      overflow:hidden;
+    }
+    button{font-family:inherit}
+
+    /* ============ GALERIE ============ */
+    #gallery{
+      position:fixed; inset:0; z-index:20;
+      overflow-y:auto;
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(94,200,255,.12), transparent 60%),
+        radial-gradient(1000px 500px at 0% 110%, rgba(122,240,200,.10), transparent 55%),
+        var(--bg);
+      transition:opacity .5s ease, visibility .5s ease;
+    }
+    #gallery.hidden{opacity:0; visibility:hidden; pointer-events:none}
+
+    .wrap{max-width:1180px; margin:0 auto; padding:48px 28px 80px}
+
+    .top{
+      display:flex; align-items:flex-end; justify-content:space-between;
+      gap:24px; flex-wrap:wrap; margin-bottom:40px;
+    }
+    .brand .eyebrow{
+      display:inline-flex; align-items:center; gap:8px;
+      font-size:12px; letter-spacing:.18em; text-transform:uppercase;
+      color:var(--accent); font-weight:600; margin-bottom:14px;
+    }
+    .brand .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--accent-2);box-shadow:0 0 12px var(--accent-2)}
+    .brand h1{
+      margin:0; font-size:clamp(28px,4vw,46px); line-height:1.05;
+      font-weight:700; letter-spacing:-.02em;
+    }
+    .brand p{margin:12px 0 0; color:var(--muted); font-size:16px; max-width:46ch}
+
+    .badge{
+      display:inline-flex; align-items:center; gap:10px;
+      padding:10px 16px; border:1px solid var(--line); border-radius:100px;
+      background:rgba(255,255,255,.03); color:var(--muted); font-size:13px;
+      white-space:nowrap;
+    }
+    .badge svg{width:16px;height:16px;stroke:var(--accent)}
+
+    .grid{
+      display:grid; gap:22px;
+      grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+    }
+    .card{
+      position:relative; border:1px solid var(--line); border-radius:18px;
+      overflow:hidden; cursor:pointer; background:var(--card);
+      box-shadow:var(--shadow);
+      transform:translateY(0); transition:transform .35s cubic-bezier(.2,.8,.2,1), border-color .35s;
+    }
+    .card:hover{transform:translateY(-6px); border-color:rgba(94,200,255,.45)}
+    .card .imgbox{position:relative; aspect-ratio:2/1; overflow:hidden}
+    .card img{
+      width:100%; height:100%; object-fit:cover; display:block;
+      transition:transform .6s cubic-bezier(.2,.8,.2,1); filter:saturate(1.05);
+    }
+    .card:hover img{transform:scale(1.07)}
+    .card .imgbox::after{
+      content:""; position:absolute; inset:0;
+      background:linear-gradient(to top, rgba(11,15,20,.85) 0%, rgba(11,15,20,0) 55%);
+    }
+    .card .play{
+      position:absolute; inset:0; display:grid; place-items:center; z-index:2;
+      opacity:0; transition:opacity .3s;
+    }
+    .card:hover .play{opacity:1}
+    .card .play span{
+      width:62px;height:62px;border-radius:50%;
+      background:rgba(94,200,255,.18); backdrop-filter:blur(6px);
+      border:1px solid rgba(94,200,255,.6);
+      display:grid;place-items:center;
+    }
+    .card .play span svg{width:24px;height:24px;fill:#fff;margin-left:3px}
+    .card .meta{position:absolute; left:0; right:0; bottom:0; padding:16px 18px; z-index:2}
+    .card .meta .t{font-size:17px; font-weight:650; letter-spacing:-.01em}
+    .card .meta .c{font-size:13px; color:var(--muted); margin-top:3px}
+    .card .num{
+      position:absolute; top:14px; left:14px; z-index:2;
+      font-size:12px; font-weight:700; letter-spacing:.05em;
+      padding:5px 10px; border-radius:8px;
+      background:rgba(0,0,0,.45); backdrop-filter:blur(4px); border:1px solid var(--line);
+    }
+    .hint{margin-top:40px; color:var(--muted); font-size:13px; display:flex; gap:18px; flex-wrap:wrap}
+    .hint b{color:var(--ink); font-weight:600}
+
+    /* ============ VIZUALIZATOR ============ */
+    #viewer{position:fixed; inset:0; z-index:10; visibility:hidden; opacity:0; transition:opacity .6s ease}
+    #viewer.active{visibility:visible; opacity:1}
+    a-scene{width:100%; height:100%}
+
+    /* UI peste scena 360 */
+    #ui{position:fixed; inset:0; z-index:15; pointer-events:none}
+    #ui .bar{
+      position:absolute; left:0; right:0;
+      display:flex; align-items:center; gap:14px;
+      padding:18px 22px;
+    }
+    #ui .bar.top{top:0; background:linear-gradient(to bottom, rgba(0,0,0,.55), transparent)}
+    #ui .bar.bottom{bottom:0; justify-content:center; background:linear-gradient(to top, rgba(0,0,0,.55), transparent)}
+
+    .ctrl{
+      pointer-events:auto;
+      display:inline-flex; align-items:center; gap:9px;
+      padding:11px 16px; border-radius:12px;
+      background:rgba(20,27,37,.72); backdrop-filter:blur(12px);
+      border:1px solid var(--line); color:var(--ink);
+      font-size:14px; font-weight:550; cursor:pointer;
+      transition:background .2s, border-color .2s, transform .15s;
+      user-select:none;
+    }
+    .ctrl:hover{background:rgba(32,42,56,.85); border-color:rgba(94,200,255,.4)}
+    .ctrl:active{transform:scale(.96)}
+    .ctrl svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2}
+    .ctrl.icon{padding:11px}
+    .ctrl.primary{background:rgba(94,200,255,.16); border-color:rgba(94,200,255,.55); color:#dff3ff}
+    .ctrl.primary:hover{background:rgba(94,200,255,.26)}
+
+    #titlebox{pointer-events:none; margin-left:4px}
+    #titlebox .t{font-size:16px; font-weight:650; letter-spacing:-.01em}
+    #titlebox .c{font-size:12.5px; color:var(--muted)}
+    .spacer{flex:1}
+
+    /* indicator de incarcare panorama */
+    #loader{
+      position:fixed; inset:0; z-index:16; display:none;
+      place-items:center; background:rgba(11,15,20,.65); backdrop-filter:blur(3px);
+    }
+    #loader.show{display:grid}
+
+    /* fade negru intre scene */
+    #fade{
+      position:fixed; inset:0; z-index:17; background:#000;
+      opacity:0; pointer-events:none; transition:opacity .35s ease;
+    }
+    #fade.show{opacity:1}
+    .ring{
+      width:46px;height:46px;border-radius:50%;
+      border:3px solid rgba(255,255,255,.15); border-top-color:var(--accent);
+      animation:spin .9s linear infinite;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* hint de interactiune, apare scurt la intrare */
+    #dragHint{
+      position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+      z-index:15; pointer-events:none; text-align:center; color:#fff;
+      background:rgba(0,0,0,.4); padding:18px 26px; border-radius:16px;
+      backdrop-filter:blur(8px); border:1px solid var(--line);
+      opacity:0; transition:opacity .5s;
+    }
+    #dragHint.show{opacity:1}
+    #dragHint svg{width:34px;height:34px;stroke:#fff;fill:none;stroke-width:1.7;margin-bottom:8px}
+    #dragHint div{font-size:14px}
+    #dragHint small{color:var(--muted)}
+
+    /* A-Frame VR button stilizare minima – il lasam vizibil */
+    .a-enter-vr-button, .a-enter-ar-button{z-index:14}
+
+    @media (max-width:640px){
+      .wrap{padding:32px 18px 60px}
+      #titlebox{display:none}
+      #ui .bar{padding:14px}
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============ GALERIE ============ -->
+  <section id="gallery">
+    <div class="wrap">
+      <div class="top">
+        <div class="brand">
+          <span class="eyebrow"><span class="dot"></span> Tur Virtual Imersiv</span>
+          <h1 id="g-title">Campus Educational</h1>
+          <p id="g-sub">Selectează o scenă pentru a intra în mediul 360°. Compatibil cu ochelari VR și Apple Vision Pro.</p>
+        </div>
+        <div class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M2 8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v6a3 3 0 0 1-3 3h-2.6a2 2 0 0 1-1.7-1l-.8-1.3a1.2 1.2 0 0 0-2 0l-.8 1.3a2 2 0 0 1-1.7 1H5a3 3 0 0 1-3-3z"/></svg>
+          WebXR · 360°
+        </div>
+      </div>
+      <div class="grid" id="grid"></div>
+      <div class="hint">
+        <span>🖱️ <b>Trage</b> pentru a privi în jur</span>
+        <span>🔍 <b>Scroll</b> pentru zoom</span>
+        <span>🥽 <b>Enter VR</b> pentru cască / Vision Pro</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ VIZUALIZATOR 360 ============ -->
+  <div id="viewer">
+    <a-scene id="scene"
+             vr-mode-ui="enabled: true"
+             loading-screen="enabled: false"
+             renderer="antialias: true; colorManagement: true; exposure: 1"
+             background="color: #000">
+      <a-sky id="sky" rotation="0 0 0"></a-sky>
+
+      <!-- containerul în care se generează hotspot-urile fiecărei scene -->
+      <a-entity id="hotspots"></a-entity>
+
+      <!-- cursor pentru MOUSE (desktop): hover mărește bulina, click selectează -->
+      <a-entity id="mouseCursor"
+                cursor="rayOrigin: mouse"
+                raycaster="objects: .hotspot; far: 100"></a-entity>
+
+      <a-entity id="rig">
+        <a-camera id="cam" fov="80" wasd-controls-enabled="false"
+                  look-controls="reverseMouseDrag: false; touchEnabled: true; magicWindowTrackingEnabled: true">
+          <!-- cursor de PRIVIRE (VR / Apple Vision Pro): privești bulina ~1s
+               (sau pinch / trigger) și te teleportează. Reticulul se umple
+               vizual cât privești. -->
+          <a-entity id="reticle"
+                    cursor="fuse: true; fuseTimeout: 1100"
+                    raycaster="objects: .hotspot; far: 100"
+                    position="0 0 -1"
+                    visible="false"
+                    geometry="primitive: ring; radiusInner: 0.008; radiusOuter: 0.013; segmentsTheta: 32"
+                    material="color: #ffffff; shader: flat; opacity: 0.9"
+                    animation__fuse="property: scale; from: 0.4 0.4 0.4; to: 1.9 1.9 1.9; startEvents: fusing; dur: 1100; easing: easeInQuad"
+                    animation__leave="property: scale; to: 1 1 1; startEvents: mouseleave; dur: 150"
+                    animation__click="property: scale; from: 1.9 1.9 1.9; to: 1 1 1; startEvents: click; dur: 200">
+          </a-entity>
+        </a-camera>
+      </a-entity>
+    </a-scene>
+  </div>
+
+  <!-- overlay UI -->
+  <div id="ui" style="display:none">
+    <div class="bar top">
+      <button class="ctrl icon" id="btnBack" title="Înapoi la galerie">
+        <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div id="titlebox">
+        <div class="t" id="v-title">—</div>
+        <div class="c" id="v-caption">—</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="ctrl icon" id="btnRotate" title="Rotire automată">
+        <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v4h-4"/></svg>
+      </button>
+      <button class="ctrl icon" id="btnFs" title="Ecran complet">
+        <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+      </button>
+    </div>
+
+    <div class="bar bottom">
+      <button class="ctrl icon" id="btnPrev" title="Scena anterioară">
+        <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <button class="ctrl primary" id="btnVR">
+        <svg viewBox="0 0 24 24" stroke-width="2"><path d="M2 8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v6a3 3 0 0 1-3 3h-2.6a2 2 0 0 1-1.7-1l-.8-1.3a1.2 1.2 0 0 0-2 0l-.8 1.3a2 2 0 0 1-1.7 1H5a3 3 0 0 1-3-3z"/></svg>
+        Enter VR
+      </button>
+      <button class="ctrl icon" id="btnNext" title="Scena următoare">
+        <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="loader"><div class="ring"></div></div>
+  <div id="fade"></div>
+
+  <div id="dragHint">
+    <svg viewBox="0 0 24 24"><path d="M5 12h14M5 12l4-4M5 12l4 4M19 12l-4-4M19 12l-4 4"/></svg>
+    <div>Trage pentru a privi în jur</div>
+    <small>Scroll = zoom · Enter VR pentru cască</small>
+  </div>
+
+  <script src="scenes.js"></script>
+  <script src="hotspots.js"></script>
+  <script>
+  (function(){
+    const T = window.TOUR;
+    let current = 0;
+    let rotating = false;
+    const idIndex = {};
+    T.scenes.forEach((s, i) => { idIndex[s.id] = i; });
+
+    // ---- populeaza galeria ----
+    document.getElementById('g-title').textContent = T.title;
+    if (T.subtitle) document.getElementById('g-sub').textContent =
+      "Selectează o scenă pentru a intra în mediul 360°. Compatibil cu ochelari VR și Apple Vision Pro.";
+
+    const grid = document.getElementById('grid');
+    T.scenes.forEach((s, i) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="imgbox">
+          <img loading="lazy" src="${s.thumb}" alt="${s.title}" />
+          <div class="play"><span><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span></div>
+        </div>
+        <div class="num">${String(i+1).padStart(2,'0')}</div>
+        <div class="meta">
+          <div class="t">${s.title}</div>
+          <div class="c">${s.caption || ''}</div>
+        </div>`;
+      card.addEventListener('click', () => openScene(i));
+      grid.appendChild(card);
+    });
+
+    // ---- elemente ----
+    const gallery = document.getElementById('gallery');
+    const viewer  = document.getElementById('viewer');
+    const ui      = document.getElementById('ui');
+    const loader  = document.getElementById('loader');
+    const dragHint= document.getElementById('dragHint');
+    const sky     = document.getElementById('sky');
+    const cam     = document.getElementById('cam');
+    const scene   = document.getElementById('scene');
+    const hsCont  = document.getElementById('hotspots');
+    const reticle = document.getElementById('reticle');
+    const fade    = document.getElementById('fade');
+
+    // construieste hotspot-urile pentru scena curenta
+    function buildHotspots(i){
+      while (hsCont.firstChild) hsCont.removeChild(hsCont.firstChild);
+      const links = T.scenes[i].links || [];
+      links.forEach(link => {
+        if (idIndex[link.to] === undefined) return;
+        hsCont.appendChild(window.buildHotspot(link));
+      });
+      // raycaster-ele trebuie să reia lista de ținte după ce am adăugat hotspot-uri noi
+      setTimeout(() => {
+        ['mouseCursor', 'reticle'].forEach(id => {
+          const rc = document.getElementById(id);
+          if (rc && rc.components && rc.components.raycaster) {
+            rc.components.raycaster.refreshObjects();
+          }
+        });
+      }, 60);
+    }
+
+    function loadPano(i){
+      const s = T.scenes[i];
+      loader.classList.add('show');
+
+      // setam sursa cerului 360 DIRECT ca URL — A-Frame incarca textura
+      // si actualizeaza materialul corect (legarea de un asset gol nu mergea).
+      sky.setAttribute('rotation', `0 ${s.startYaw || 0} 0`);
+      sky.setAttribute('src', s.image);
+
+      // ascundem spinner-ul cand textura e gata
+      const onLoaded = () => { loader.classList.remove('show'); };
+      sky.addEventListener('materialtextureloaded', onLoaded, { once: true });
+      // plasa de siguranta: ascunde spinner-ul si daca evenimentul intarzie
+      const tmp = new Image();
+      tmp.onload = () => loader.classList.remove('show');
+      tmp.onerror = () => loader.classList.remove('show');
+      tmp.src = s.image;
+
+      buildHotspots(i);
+      document.getElementById('v-title').textContent = s.title;
+      document.getElementById('v-caption').textContent = s.caption || '';
+    }
+
+    // navigare prin hotspot, cu tranziție fade negru
+    window.navigateTo = function(targetId){
+      const i = idIndex[targetId];
+      if (i === undefined) return;
+      fade.classList.add('show');
+      setTimeout(() => {
+        current = i;
+        loadPano(i);
+        setTimeout(() => fade.classList.remove('show'), 220);
+      }, 360);
+    };
+
+    function openScene(i){
+      current = i;
+      gallery.classList.add('hidden');
+      viewer.classList.add('active');
+      ui.style.display = 'block';
+      loadPano(i);
+      // hint scurt
+      setTimeout(()=>{ dragHint.classList.add('show');
+        setTimeout(()=>dragHint.classList.remove('show'), 2600); }, 600);
+    }
+
+    function closeScene(){
+      viewer.classList.remove('active');
+      ui.style.display = 'none';
+      gallery.classList.remove('hidden');
+      rotating = false;
+    }
+
+    function go(delta){
+      current = (current + delta + T.scenes.length) % T.scenes.length;
+      loadPano(current);
+    }
+
+    // ---- butoane ----
+    document.getElementById('btnBack').onclick = closeScene;
+    document.getElementById('btnPrev').onclick = () => go(-1);
+    document.getElementById('btnNext').onclick = () => go(1);
+    document.getElementById('btnVR').onclick = () => {
+      if (scene.is && scene.is('vr-mode')) scene.exitVR();
+      else scene.enterVR();
+    };
+    document.getElementById('btnRotate').onclick = (e) => {
+      rotating = !rotating;
+      e.currentTarget.style.color = rotating ? 'var(--accent)' : 'var(--ink)';
+    };
+    document.getElementById('btnFs').onclick = () => {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    };
+
+    // ---- zoom cu scroll (modifica fov) ----
+    window.addEventListener('wheel', (e) => {
+      if (!viewer.classList.contains('active')) return;
+      const cur = parseFloat(cam.getAttribute('fov'));
+      let next = cur + (e.deltaY > 0 ? 4 : -4);
+      next = Math.max(35, Math.min(100, next));
+      cam.setAttribute('fov', next);
+    }, {passive:true});
+
+    // ---- rotire automata ----
+    let last = performance.now();
+    function tick(now){
+      const dt = (now - last) / 1000; last = now;
+      if (rotating && viewer.classList.contains('active') && !(scene.is && scene.is('vr-mode'))){
+        const r = sky.getAttribute('rotation');
+        sky.setAttribute('rotation', `0 ${(r.y + dt*3)} 0`);
+      }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // ---- tastatura ----
+    window.addEventListener('keydown', (e) => {
+      if (!viewer.classList.contains('active')) return;
+      if (e.key === 'Escape') closeScene();
+      if (e.key === 'ArrowRight') go(1);
+      if (e.key === 'ArrowLeft') go(-1);
+    });
+
+    // opreste rotirea cand userul incepe sa traga
+    scene.addEventListener('mousedown', ()=>{ if(rotating){ rotating=false;
+      document.getElementById('btnRotate').style.color='var(--ink)'; }});
+
+    // reticulul de privire (fuse) e util doar in VR; pe desktop folosim mouse-ul
+    scene.addEventListener('enter-vr', ()=> reticle.setAttribute('visible', true));
+    scene.addEventListener('exit-vr',  ()=> reticle.setAttribute('visible', false));
+  })();
+  </script>
+</body>
+</html>
