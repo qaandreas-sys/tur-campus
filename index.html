@@ -381,7 +381,7 @@
     T.scenes.forEach((s, i) => { idIndex[s.id] = i; });
 
     // ---- copie de lucru a legăturilor (editabilă, salvată local) ----
-    const STORAGE_KEY = 'tur_campus_links_v2';
+    const STORAGE_KEY = 'tur_campus_links_v3';
     const workLinks = {};
     T.scenes.forEach(s => { workLinks[s.id] = (s.links || []).map(l => Object.assign({}, l)); });
     try {
