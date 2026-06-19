@@ -286,13 +286,12 @@
         </a-camera>
       </a-entity>
 
-      <!-- controllere VR (Quest etc.): laser + click pe trigger navighează -->
+      <!-- controllere VR (Quest etc.): laserul intersectează hotspot-urile;
+           selecția cu orice buton e gestionată în JS (hover + navigare). -->
       <a-entity id="leftHand"  laser-controls="hand: left"
-                raycaster="objects: .hotspot; far: 100; lineColor: #5ec8ff; lineOpacity: 0.85"
-                cursor="fuse: false; rayOrigin: entity"></a-entity>
+                raycaster="objects: .hotspot; far: 100; lineColor: #5ec8ff; lineOpacity: 0.85"></a-entity>
       <a-entity id="rightHand" laser-controls="hand: right"
-                raycaster="objects: .hotspot; far: 100; lineColor: #5ec8ff; lineOpacity: 0.85"
-                cursor="fuse: false; rayOrigin: entity"></a-entity>
+                raycaster="objects: .hotspot; far: 100; lineColor: #5ec8ff; lineOpacity: 0.85"></a-entity>
     </a-scene>
   </div>
 
@@ -532,6 +531,7 @@
         const r = sky.getAttribute('rotation');
         sky.setAttribute('rotation', `0 ${(r.y + dt*3)} 0`);
       }
+      updateVRHover();
       requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
@@ -639,19 +639,66 @@
       navByRay();
     }
 
-    // intersectează hotspot-urile cu raza _ray (deja setată) și navighează
-    function navByRay(){
+    // întoarce entitatea-hotspot intersectată de raza _ray (deja setată), sau null
+    function hotspotElFromRay(){
       const meshes = [];
       Array.prototype.forEach.call(hsCont.querySelectorAll('[hotspot]'), el => {
         el.object3D.traverse(o => { if (o.isMesh) { o.userData._hsEl = el; meshes.push(o); } });
       });
       const hit = _ray.intersectObjects(meshes, true)[0];
-      if (!hit) return;
+      if (!hit) return null;
       let o = hit.object, el = o.userData._hsEl;
       while (!el && o.parent) { o = o.parent; el = o.userData._hsEl; }
+      return el || null;
+    }
+
+    // intersectează cu raza _ray și navighează la ținta hotspot-ului
+    function navByRay(){
+      const el = hotspotElFromRay();
       if (el) {
         const data = el.getAttribute('hotspot');
         if (data && data.to) window.navigateTo(data.to);
+      }
+    }
+
+    // ===== controllere VR (Quest): rază din manetă + orice buton selectează =====
+    const _q = new THREE.Quaternion();
+    function setRayFromController(c){
+      const o = c.object3D;
+      const origin = new THREE.Vector3(); o.getWorldPosition(origin);
+      o.getWorldQuaternion(_q);
+      _ray.set(origin, new THREE.Vector3(0, 0, -1).applyQuaternion(_q).normalize());
+    }
+    function hotspotFromController(c){ setRayFromController(c); return hotspotElFromRay(); }
+
+    const hands = { leftHand: false, rightHand: false };
+    const BTN_EVENTS = ['triggerdown','abuttondown','bbuttondown','xbuttondown','ybuttondown','gripdown'];
+    ['leftHand','rightHand'].forEach(id => {
+      const c = document.getElementById(id);
+      if (!c) return;
+      c.addEventListener('controllerconnected', () => { hands[id] = true; });
+      c.addEventListener('controllerdisconnected', () => { hands[id] = false; });
+      // orice buton de pe manetă selectează ce arată laserul (A, B, X, Y, trigger, grip)
+      BTN_EVENTS.forEach(evt => c.addEventListener(evt, () => {
+        const el = hotspotFromController(c);
+        if (el) { const d = el.getAttribute('hotspot'); if (d && d.to) window.navigateTo(d.to); }
+      }));
+    });
+
+    // evidențiere (mărire) a hotspot-ului țintit de laser în VR
+    let vrHover = null;
+    function updateVRHover(){
+      if (!(scene.is && scene.is('vr-mode'))) {
+        if (vrHover) { vrHover.emit('mouseleave'); vrHover = null; }
+        return;
+      }
+      let el = null;
+      if (hands.rightHand) el = hotspotFromController(document.getElementById('rightHand'));
+      if (!el && hands.leftHand) el = hotspotFromController(document.getElementById('leftHand'));
+      if (el !== vrHover) {
+        if (vrHover) vrHover.emit('mouseleave');
+        vrHover = el;
+        if (vrHover) vrHover.emit('mouseenter');
       }
     }
 
