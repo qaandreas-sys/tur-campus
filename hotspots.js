@@ -19,7 +19,7 @@ AFRAME.registerComponent('face-camera', {
     o.lookAt(this._v);
     o.rotateY(Math.PI); // ca fata vizibila (+Z) sa priveasca spre camera
     // plutire subtila pe verticala
-    o.position.y = this._baseY + Math.sin((time / 1000 + this._t0) * 1.4) * 0.06;
+    o.position.y = this._baseY + Math.sin((time / 1000 + this._t0) * 1.4) * 0.03;
   },
   update: function () {
     this._baseY = this.el.object3D.position.y;
@@ -86,25 +86,25 @@ window.buildHotspot = function (link) {
   root.setAttribute('face-camera', '');
   root.setAttribute('hotspot', `to: ${link.to}; label: ${link.label || ''}`);
 
-  // disc translucid (zona de hover / click)
+  // disc translucid (zona de hover / click) — mai mic
   const fill = document.createElement('a-circle');
   fill.classList.add('hs-fill');
-  fill.setAttribute('radius', '0.42');
-  fill.setAttribute('material', 'color: #5ec8ff; shader: flat; opacity: 0.22; side: double');
+  fill.setAttribute('radius', '0.22');
+  fill.setAttribute('material', 'color: #5ec8ff; shader: flat; opacity: 0.25; side: double');
   root.appendChild(fill);
 
   // inel exterior
   const ring = document.createElement('a-ring');
-  ring.setAttribute('radius-inner', '0.42');
-  ring.setAttribute('radius-outer', '0.5');
+  ring.setAttribute('radius-inner', '0.22');
+  ring.setAttribute('radius-outer', '0.27');
   ring.setAttribute('material', 'color: #ffffff; shader: flat; opacity: 0.95; side: double');
   root.appendChild(ring);
 
   // sageata (chevron) catre interior - sugereaza "intra / mergi acolo"
   const arrow = document.createElement('a-triangle');
-  arrow.setAttribute('vertex-a', '0 0.16 0.01');
-  arrow.setAttribute('vertex-b', '-0.15 -0.08 0.01');
-  arrow.setAttribute('vertex-c', '0.15 -0.08 0.01');
+  arrow.setAttribute('vertex-a', '0 0.085 0.01');
+  arrow.setAttribute('vertex-b', '-0.08 -0.045 0.01');
+  arrow.setAttribute('vertex-c', '0.08 -0.045 0.01');
   arrow.setAttribute('material', 'color: #ffffff; shader: flat; side: double');
   root.appendChild(arrow);
 
@@ -112,9 +112,9 @@ window.buildHotspot = function (link) {
   if (link.label) {
     const lblbg = document.createElement('a-plane');
     lblbg.classList.add('hs-labelbg');
-    lblbg.setAttribute('position', '0 0.95 -0.02');
-    lblbg.setAttribute('width', Math.max(1.4, link.label.length * 0.16));
-    lblbg.setAttribute('height', '0.42');
+    lblbg.setAttribute('position', '0 0.52 -0.02');
+    lblbg.setAttribute('width', Math.max(0.9, link.label.length * 0.11));
+    lblbg.setAttribute('height', '0.26');
     lblbg.setAttribute('material', 'color: #0b0f14; shader: flat; opacity: 0.75; side: double');
     lblbg.setAttribute('visible', 'false');
     root.appendChild(lblbg);
@@ -124,8 +124,8 @@ window.buildHotspot = function (link) {
     lbl.setAttribute('value', link.label);
     lbl.setAttribute('align', 'center');
     lbl.setAttribute('color', '#ffffff');
-    lbl.setAttribute('width', '4');
-    lbl.setAttribute('position', '0 0.95 0');
+    lbl.setAttribute('width', '2.6');
+    lbl.setAttribute('position', '0 0.52 0');
     lbl.setAttribute('visible', 'false');
     root.appendChild(lbl);
   }

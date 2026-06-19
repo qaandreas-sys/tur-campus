@@ -161,6 +161,46 @@
     }
     #loader.show{display:grid}
 
+    /* ===== editor ===== */
+    #btnEdit{display:none}  /* ascuns pentru vizitatori; apare cu ?edit sau tasta E */
+    #editBar{
+      position:fixed; left:18px; top:78px; z-index:18; width:268px;
+      background:rgba(18,24,33,.92); backdrop-filter:blur(12px);
+      border:1px solid var(--line); border-radius:14px; padding:14px;
+      display:none; box-shadow:var(--shadow);
+    }
+    #editBar.show{display:block}
+    .eb-row{display:flex; align-items:center; gap:8px; font-size:14px}
+    .eb-dot{width:8px;height:8px;border-radius:50%;background:var(--accent-2);box-shadow:0 0 10px var(--accent-2)}
+    .eb-tip{font-size:12px; color:var(--muted); margin:8px 0 12px; line-height:1.45}
+    .eb-actions{display:flex; flex-wrap:wrap; gap:8px}
+    .eb-btn{
+      flex:1 1 auto; padding:9px 10px; border-radius:9px; cursor:pointer;
+      background:rgba(255,255,255,.05); border:1px solid var(--line);
+      color:var(--ink); font-size:12.5px; font-weight:550;
+    }
+    .eb-btn:hover{background:rgba(255,255,255,.1)}
+    .eb-btn.primary{background:rgba(94,200,255,.18); border-color:rgba(94,200,255,.5); color:#dff3ff}
+
+    #pickOverlay{
+      position:fixed; inset:0; z-index:30; display:none;
+      place-items:center; background:rgba(5,8,12,.6); backdrop-filter:blur(4px);
+    }
+    #pickOverlay.show{display:grid}
+    #pickBox{
+      width:min(92vw,360px); background:var(--card); border:1px solid var(--line);
+      border-radius:16px; padding:20px; box-shadow:var(--shadow);
+    }
+    .pick-title{font-size:16px; font-weight:650; margin-bottom:14px}
+    #pickList{display:flex; flex-direction:column; gap:8px; margin-bottom:14px}
+    .pick-item{
+      display:flex; align-items:center; gap:12px; padding:8px; cursor:pointer;
+      border:1px solid var(--line); border-radius:10px; background:rgba(255,255,255,.03);
+    }
+    .pick-item:hover{border-color:rgba(94,200,255,.5); background:rgba(94,200,255,.08)}
+    .pick-item img{width:64px; height:32px; object-fit:cover; border-radius:5px}
+    .pick-item span{font-size:13.5px; font-weight:550}
+
     /* fade negru intre scene */
     #fade{
       position:fixed; inset:0; z-index:17; background:#000;
@@ -272,6 +312,10 @@
         <div class="c" id="v-caption">—</div>
       </div>
       <div class="spacer"></div>
+      <button class="ctrl" id="btnEdit" title="Mod editare săgeți">
+        <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+        Editează
+      </button>
       <button class="ctrl icon" id="btnRotate" title="Rotire automată">
         <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v4h-4"/></svg>
       </button>
@@ -303,6 +347,28 @@
     <small>Scroll = zoom · Enter VR pentru cască</small>
   </div>
 
+  <!-- ===== MOD EDITARE ===== -->
+  <div id="editBar">
+    <div class="eb-row">
+      <span class="eb-dot"></span><b>Mod editare</b>
+    </div>
+    <div class="eb-tip">Dă click în panoramă unde vrei o săgeată, apoi alege scena țintă. Click pe o săgeată existentă = o ștergi.</div>
+    <div class="eb-actions">
+      <button class="eb-btn" id="ebClear">Șterge tot din scenă</button>
+      <button class="eb-btn primary" id="ebCopy">Copiază config</button>
+      <button class="eb-btn" id="ebExit">Ieși</button>
+    </div>
+  </div>
+
+  <!-- panou selectare scenă țintă -->
+  <div id="pickOverlay">
+    <div id="pickBox">
+      <div class="pick-title">Această săgeată duce la…</div>
+      <div id="pickList"></div>
+      <button class="eb-btn" id="pickCancel">Anulează</button>
+    </div>
+  </div>
+
   <script src="scenes.js"></script>
   <script src="hotspots.js"></script>
   <script>
@@ -310,8 +376,19 @@
     const T = window.TOUR;
     let current = 0;
     let rotating = false;
+    let editMode = false;
     const idIndex = {};
     T.scenes.forEach((s, i) => { idIndex[s.id] = i; });
+
+    // ---- copie de lucru a legăturilor (editabilă, salvată local) ----
+    const STORAGE_KEY = 'tur_campus_links_v2';
+    const workLinks = {};
+    T.scenes.forEach(s => { workLinks[s.id] = (s.links || []).map(l => Object.assign({}, l)); });
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (saved) Object.keys(saved).forEach(k => { if (workLinks[k]) workLinks[k] = saved[k]; });
+    } catch (e) {}
+    const saveLinks = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(workLinks)); } catch (e) {} };
 
     // ---- populeaza galeria ----
     document.getElementById('g-title').textContent = T.title;
@@ -352,7 +429,7 @@
     // construieste hotspot-urile pentru scena curenta
     function buildHotspots(i){
       while (hsCont.firstChild) hsCont.removeChild(hsCont.firstChild);
-      const links = T.scenes[i].links || [];
+      const links = workLinks[T.scenes[i].id] || [];
       links.forEach(link => {
         if (idIndex[link.to] === undefined) return;
         hsCont.appendChild(window.buildHotspot(link));
@@ -393,6 +470,7 @@
 
     // navigare prin hotspot, cu tranziție fade negru
     window.navigateTo = function(targetId){
+      if (editMode) return; // în editare, click-urile sunt gestionate de editor
       const i = idIndex[targetId];
       if (i === undefined) return;
       fade.classList.add('show');
@@ -419,6 +497,7 @@
       ui.style.display = 'none';
       gallery.classList.remove('hidden');
       rotating = false;
+      setEdit(false);
     }
 
     function go(delta){
@@ -479,6 +558,124 @@
     // reticulul de privire (fuse) e util doar in VR; pe desktop folosim mouse-ul
     scene.addEventListener('enter-vr', ()=> reticle.setAttribute('visible', true));
     scene.addEventListener('exit-vr',  ()=> reticle.setAttribute('visible', false));
+
+    // ================= MOD EDITARE SĂGEȚI =================
+    const editBar    = document.getElementById('editBar');
+    const pickOverlay= document.getElementById('pickOverlay');
+    const pickList   = document.getElementById('pickList');
+    const btnEdit    = document.getElementById('btnEdit');
+    const PLACE_RADIUS = 6;
+    const THREE = window.AFRAME.THREE;
+    const _ray = new THREE.Raycaster();
+    const _ndc = new THREE.Vector2();
+    let pendingPos = null, downX = 0, downY = 0, downT = 0;
+
+    window.setEdit = function(on){
+      editMode = on;
+      btnEdit.style.display = 'inline-flex';  // dezvăluie butonul când intri în editare
+      editBar.classList.toggle('show', on);
+      btnEdit.style.color = on ? 'var(--accent)' : '';
+      if (!on) { pendingPos = null; pickOverlay.classList.remove('show'); }
+    };
+
+    // dezvăluie butonul „Editează” dacă linkul conține ?edit
+    if (/[?&]edit\b/.test(location.search)) btnEdit.style.display = 'inline-flex';
+    // scurtătură ascunsă: tasta E comută modul editare
+    window.addEventListener('keydown', e => {
+      if (viewer.classList.contains('active') && (e.key === 'e' || e.key === 'E')) setEdit(!editMode);
+    });
+
+    btnEdit.onclick = () => setEdit(!editMode);
+    document.getElementById('ebExit').onclick = () => setEdit(false);
+    document.getElementById('ebClear').onclick = () => {
+      if (!confirm('Ștergi toate săgețile din această scenă?')) return;
+      workLinks[T.scenes[current].id] = [];
+      saveLinks(); buildHotspots(current);
+    };
+    document.getElementById('ebCopy').onclick = copyConfig;
+    document.getElementById('pickCancel').onclick = () => {
+      pendingPos = null; pickOverlay.classList.remove('show');
+    };
+
+    // detectează click (nu drag) pe canvas-ul 3D
+    function attachCanvas(){
+      const cv = scene.canvas;
+      if (!cv) { setTimeout(attachCanvas, 200); return; }
+      cv.addEventListener('pointerdown', e => { downX = e.clientX; downY = e.clientY; downT = Date.now(); });
+      cv.addEventListener('pointerup', e => {
+        if (!editMode || !viewer.classList.contains('active')) return;
+        const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
+        if (moved > 6 || Date.now() - downT > 500) return; // a fost drag
+        handleEditClick(e.clientX, e.clientY);
+      });
+    }
+    attachCanvas();
+
+    function handleEditClick(clientX, clientY){
+      const cv = scene.canvas, r = cv.getBoundingClientRect();
+      _ndc.x = ((clientX - r.left) / r.width) * 2 - 1;
+      _ndc.y = -((clientY - r.top) / r.height) * 2 + 1;
+      _ray.setFromCamera(_ndc, scene.camera);
+
+      // 1) am lovit o săgeată existentă? -> o ștergem
+      const meshes = [];
+      Array.prototype.forEach.call(hsCont.querySelectorAll('[hotspot]'), (el, idx) => {
+        el.object3D.traverse(o => { if (o.isMesh) { o.userData._hsIndex = idx; meshes.push(o); } });
+      });
+      const hit = _ray.intersectObjects(meshes, true)[0];
+      if (hit) {
+        let o = hit.object, idx = o.userData._hsIndex;
+        while (idx === undefined && o.parent) { o = o.parent; idx = o.userData._hsIndex; }
+        if (idx !== undefined) {
+          workLinks[T.scenes[current].id].splice(idx, 1);
+          saveLinks(); buildHotspots(current);
+          return;
+        }
+      }
+      // 2) altfel plasăm o săgeată nouă exact în direcția click-ului
+      const d = _ray.ray.direction.clone().normalize().multiplyScalar(PLACE_RADIUS);
+      pendingPos = { x: +d.x.toFixed(2), y: +d.y.toFixed(2), z: +d.z.toFixed(2) };
+      openPicker();
+    }
+
+    function openPicker(){
+      pickList.innerHTML = '';
+      T.scenes.forEach((s, i) => {
+        if (i === current) return;
+        const it = document.createElement('div');
+        it.className = 'pick-item';
+        it.innerHTML = '<img src="' + s.thumb + '"><span>' + s.title + '</span>';
+        it.onclick = () => {
+          workLinks[T.scenes[current].id].push({
+            to: s.id, label: s.title,
+            position: pendingPos.x + ' ' + pendingPos.y + ' ' + pendingPos.z
+          });
+          saveLinks(); buildHotspots(current);
+          pendingPos = null; pickOverlay.classList.remove('show');
+        };
+        pickList.appendChild(it);
+      });
+      pickOverlay.classList.add('show');
+    }
+
+    function copyConfig(){
+      const body = T.scenes.map(s => {
+        const ls = (workLinks[s.id] || []).map(l =>
+          '      { to: "' + l.to + '", label: "' + (l.label || '') + '", position: "' + l.position + '" }'
+        ).join(',\n');
+        return '  "' + s.id + '": [\n' + ls + '\n  ]';
+      }).join(',\n');
+      const txt = '// Legături hotspot generate din editor — trimite acest text în chat.\n{\n' + body + '\n}';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(
+          () => alert('✅ Configurația a fost copiată!\n\nLipește-o în chat ca să o salvez permanent în site.'),
+          () => window.prompt('Copiază manual (Ctrl+C):', txt)
+        );
+      } else {
+        window.prompt('Copiază manual (Ctrl+C):', txt);
+      }
+    }
+
   })();
   </script>
 </body>
