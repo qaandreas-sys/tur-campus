@@ -298,6 +298,14 @@
           </a-entity>
         </a-camera>
       </a-entity>
+
+      <!-- controllere VR (Quest etc.): laser + click pe trigger navighează -->
+      <a-entity id="leftHand"  laser-controls="hand: left"
+                raycaster="objects: .hotspot; far: 100; lineColor: #5ec8ff; lineOpacity: 0.85"
+                cursor="fuse: false; rayOrigin: entity"></a-entity>
+      <a-entity id="rightHand" laser-controls="hand: right"
+                raycaster="objects: .hotspot; far: 100; lineColor: #5ec8ff; lineOpacity: 0.85"
+                cursor="fuse: false; rayOrigin: entity"></a-entity>
     </a-scene>
   </div>
 
@@ -377,6 +385,7 @@
     let current = 0;
     let rotating = false;
     let editMode = false;
+    let navigating = false;
     const idIndex = {};
     T.scenes.forEach((s, i) => { idIndex[s.id] = i; });
 
@@ -434,13 +443,10 @@
         if (idIndex[link.to] === undefined) return;
         hsCont.appendChild(window.buildHotspot(link));
       });
-      // raycaster-ele trebuie să reia lista de ținte după ce am adăugat hotspot-uri noi
+      // toate raycaster-ele (mouse, gaze, controllere VR) trebuie să reia lista de ținte
       setTimeout(() => {
-        ['mouseCursor', 'reticle'].forEach(id => {
-          const rc = document.getElementById(id);
-          if (rc && rc.components && rc.components.raycaster) {
-            rc.components.raycaster.refreshObjects();
-          }
+        document.querySelectorAll('[raycaster]').forEach(el => {
+          if (el.components && el.components.raycaster) el.components.raycaster.refreshObjects();
         });
       }, 60);
     }
@@ -470,14 +476,15 @@
 
     // navigare prin hotspot, cu tranziție fade negru
     window.navigateTo = function(targetId){
-      if (editMode) return; // în editare, click-urile sunt gestionate de editor
+      if (editMode || navigating) return; // în editare sau deja în tranziție
       const i = idIndex[targetId];
       if (i === undefined) return;
+      navigating = true;
       fade.classList.add('show');
       setTimeout(() => {
         current = i;
         loadPano(i);
-        setTimeout(() => fade.classList.remove('show'), 220);
+        setTimeout(() => { fade.classList.remove('show'); navigating = false; }, 220);
       }, 360);
     };
 
@@ -603,13 +610,34 @@
       if (!cv) { setTimeout(attachCanvas, 200); return; }
       cv.addEventListener('pointerdown', e => { downX = e.clientX; downY = e.clientY; downT = Date.now(); });
       cv.addEventListener('pointerup', e => {
-        if (!editMode || !viewer.classList.contains('active')) return;
+        if (!viewer.classList.contains('active')) return;
         const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
         if (moved > 6 || Date.now() - downT > 500) return; // a fost drag
-        handleEditClick(e.clientX, e.clientY);
+        if (editMode) handleEditClick(e.clientX, e.clientY);
+        else handleNavClick(e.clientX, e.clientY);
       });
     }
     attachCanvas();
+
+    // raycast direct (mouse/touch) -> navighează. Robust, nu depinde de cursorul A-Frame.
+    function handleNavClick(clientX, clientY){
+      const cv = scene.canvas, r = cv.getBoundingClientRect();
+      _ndc.x = ((clientX - r.left) / r.width) * 2 - 1;
+      _ndc.y = -((clientY - r.top) / r.height) * 2 + 1;
+      _ray.setFromCamera(_ndc, scene.camera);
+      const meshes = [];
+      Array.prototype.forEach.call(hsCont.querySelectorAll('[hotspot]'), el => {
+        el.object3D.traverse(o => { if (o.isMesh) { o.userData._hsEl = el; meshes.push(o); } });
+      });
+      const hit = _ray.intersectObjects(meshes, true)[0];
+      if (!hit) return;
+      let o = hit.object, el = o.userData._hsEl;
+      while (!el && o.parent) { o = o.parent; el = o.userData._hsEl; }
+      if (el) {
+        const data = el.getAttribute('hotspot');
+        if (data && data.to) window.navigateTo(data.to);
+      }
+    }
 
     function handleEditClick(clientX, clientY){
       const cv = scene.canvas, r = cv.getBoundingClientRect();
